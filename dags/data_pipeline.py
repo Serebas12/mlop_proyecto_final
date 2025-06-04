@@ -15,8 +15,8 @@ from sklearn.model_selection import train_test_split
 BATCH_SIZE = 1500
 RAW_DB_URI = os.getenv("RAW_DB_CONN")
 CLEAN_DB_URI = os.getenv("CLEAN_DB_CONN")  
-API_URL = os.getenv("DB_GET_DATA", "http://fastapi:8989/data")
-API_URL_reset = os.getenv("DB_FORMAT_DATA", "http://fastapi:8989/reset")
+API_URL = os.getenv("DB_GET_DATA", "http://10.43.101.108:80/data?group_number=6&day=Wednesday")
+API_URL_reset = os.getenv("DB_FORMAT_DATA", "http://10.43.101.108:80/restart_data_generation?group_number=6&day=Wednesday")
 SCHEMA_RAW = "raw_data"
 SCHEMA_CLEAN = "clean_data"
 TABLE_NAME = "raw_data_init"
