@@ -10,12 +10,12 @@ from airflow.exceptions import AirflowSkipException
 from sqlalchemy import create_engine, text
 from mlflow.tracking import MlflowClient
 
-# Configuración
-CLEAN_DB_URI = os.getenv("CLEAN_DB_CONN")
-MLFLOW_MODEL = "my_model"
-FASTAPI_HOOK = "http://fastapi:8989/hooks/model_update"
-RAW_SCHEMA = "raw_data"
-RAW_TABLE = "inference_logs"
+# ─── Configuración ─────────────────────────────────────────────────────────────
+CLEAN_DB_URI    = os.getenv("CLEAN_DB_CONN")
+MLFLOW_MODEL    = "my_model"
+FASTAPI_HOOK    = "http://fastapi:8989/hooks/model_update"
+RAW_SCHEMA      = "raw_data"
+RAW_TABLE       = "inference_logs"
 
 default_args = {
     "owner": "airflow",
@@ -32,8 +32,8 @@ with DAG(
     tags=["production"],
 ) as dag:
 
+    # 1) Crear la tabla de rawdata si no existe
     def ensure_rawdata_table_fn():
-        """Crea la tabla de logs de inferencia si no existe."""
         engine = create_engine(CLEAN_DB_URI)
         with engine.begin() as conn:
             # Crear esquema
@@ -56,6 +56,8 @@ with DAG(
         python_callable=ensure_rawdata_table_fn,
     )
 
+
+    # 2) Esperar al record_model_history del DAG modeling_pipeline
     wait_for_history = ExternalTaskSensor(
         task_id="wait_for_model_history",
         external_dag_id="modeling_pipeline",
@@ -65,8 +67,9 @@ with DAG(
         timeout=10*60,
     )
 
+
+    # 3) Notificar a FastAPI si hay un nuevo modelo en Production
     def notify_fastapi_fn():
-        """Notifica a FastAPI sobre el nuevo modelo en producción."""
         client = MlflowClient()
         # Obtener la última versión en Production
         prod_versions = client.get_latest_versions(MLFLOW_MODEL, stages=["Production"])
@@ -74,14 +77,14 @@ with DAG(
             raise AirflowSkipException("No hay modelo en Production")
 
         latest = prod_versions[0]
-        model_name = latest.name
+        model_name    = latest.name
         model_version = int(latest.version)
-        run_id = latest.run_id
+        run_id        = latest.run_id
 
         payload = {
-            "model_name": model_name,
+            "model_name":    model_name,
             "model_version": model_version,
-            "run_id": run_id
+            "run_id":        run_id
         }
         resp = requests.post(FASTAPI_HOOK, json=payload, timeout=10)
         resp.raise_for_status()
@@ -92,5 +95,8 @@ with DAG(
         python_callable=notify_fastapi_fn,
     )
 
-    # Definir dependencias
-    ensure_rawdata_table >> wait_for_history >> notify_fastapi 
+
+    # Flujo de dependencias
+    ensure_rawdata_table \
+        >> wait_for_history \
+        >> notify_fastapi
